@@ -75,3 +75,11 @@ class StoredAuth(BaseModel):
     timestamp: int  # Unix milliseconds
     mobile_access_token: Optional[str] = None   # token for apieu.coros.com (sleep data)
     mobile_login_payload: Optional[dict] = None  # encrypted login body for auto-refresh
+
+    def __repr__(self) -> str:
+        tok = f"{self.access_token[:8]}…" if self.access_token else "None"
+        mob = "present" if self.mobile_access_token else "None"
+        return (
+            f"StoredAuth(user_id={self.user_id!r}, region={self.region!r}, "
+            f"access_token=<{tok}>, mobile_token=<{mob}>)"
+        )
