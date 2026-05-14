@@ -75,6 +75,37 @@ def _summarize_steps(steps: list[dict]) -> tuple[float, int]:
 
 
 # ---------------------------------------------------------------------------
+# Tool: get_help
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def get_help() -> dict:
+    """List all available Coros MCP tools with a short description of each."""
+    return {
+        "tools": [
+            {"name": "get_help", "description": "List all available tools (this tool)"},
+            {"name": "authenticate_coros", "description": "Log in with email/password; stores web API token (required before all data tools)"},
+            {"name": "authenticate_coros_mobile", "description": "Add mobile token for sleep stage data (deep/light/REM/awake)"},
+            {"name": "check_coros_auth", "description": "Show current auth status, region, and token expiry"},
+            {"name": "get_daily_metrics", "description": "Fetch daily training metrics: HRV, sleep hours, steps, stress, resting HR, VO2max, fitness score"},
+            {"name": "get_sleep_data", "description": "Fetch nightly sleep records with duration and quality score (mobile auth required for stage breakdown)"},
+            {"name": "list_activities", "description": "List recorded activities (runs, rides, swims, etc.) with summaries"},
+            {"name": "get_activity_detail", "description": "Get full detail for one activity by label_id"},
+            {"name": "list_workouts", "description": "List planned structured workouts saved in the Coros Training Hub"},
+            {"name": "create_workout", "description": "Create a new structured workout with intervals and steps"},
+            {"name": "delete_workout", "description": "Delete a workout by workout_id"},
+            {"name": "list_planned_activities", "description": "List workouts scheduled on the training calendar"},
+            {"name": "schedule_workout", "description": "Schedule a workout on a specific date"},
+            {"name": "remove_scheduled_workout", "description": "Remove a workout from the training calendar"},
+            {"name": "create_strength_workout", "description": "Create a strength/gym workout with exercises and sets"},
+            {"name": "list_exercises", "description": "List available strength exercises (used when building strength workouts)"},
+            {"name": "sync_coros_data", "description": "Backfill local cache from the Coros API for a date range"},
+            {"name": "get_cache_status", "description": "Show local cache coverage: date ranges stored for each data type"},
+        ]
+    }
+
+
+# ---------------------------------------------------------------------------
 # Tool: authenticate_coros
 # ---------------------------------------------------------------------------
 
