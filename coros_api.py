@@ -640,6 +640,8 @@ def _build_workout_program_payload(
     steps: list of dicts — either plain steps or repeat groups (see
     save_workout_template docstring).
     """
+    if not steps:
+        raise ValueError("workout requires at least one step")
     exercises: list[dict] = []
     top_index = 0  # counts top-level positions for sortNo
     total_seconds = 0
@@ -917,7 +919,10 @@ _strength_catalog_lock = asyncio.Lock()
 
 
 def _reset_strength_catalog_cache() -> None:
-    """Test-only: clear the module-level catalog cache."""
+    """Test-only helper: clear the module-level strength-catalog cache so
+    the next call to _load_strength_catalog refetches. Not part of the
+    public API — production code has no reason to invalidate the cache
+    (process restart is the supported way to pick up catalog changes)."""
     global _strength_catalog_cache, _strength_catalog_loaded_at
     _strength_catalog_cache = None
     _strength_catalog_loaded_at = 0.0
@@ -1195,12 +1200,17 @@ async def _post_schedule_inline(
 ) -> dict:
     """Resolve next idInPlan + POST /training/schedule/update with the program
     embedded inline, then GET the schedule again to surface server-assigned
-    identifiers. Returns a 4-key dict: plan_id, id_in_plan, plan_program_id,
-    entity_id (all strings). On enrichment failure the schedule POST has
-    already succeeded — only id_in_plan is populated, the other three are
-    empty strings.
+    identifiers. Returns a 5-key dict: plan_id, id_in_plan, plan_program_id,
+    entity_id (all strings) and enrichment_ok (bool). On enrichment failure
+    the schedule POST has already succeeded — only id_in_plan is populated,
+    the other three string IDs are empty and enrichment_ok is False so the
+    caller can surface a warning instead of piping empty IDs straight into
+    remove_scheduled_workout.
 
-    maxIdInPlan + 1 is racy under concurrent calls — pre-existing behavior.
+    NOTE: idInPlan is resolved as maxIdInPlan + 1 from the pre-POST schedule
+    GET. This is racy under concurrent calls for the same happen_day —
+    pre-existing behavior, acceptable for single-user MCP. Do not call this
+    in parallel for the same date.
     """
     async with httpx.AsyncClient(timeout=30) as client:
         pre_data = await _fetch_schedule_data(client, auth, happen_day, happen_day)
@@ -1243,6 +1253,7 @@ async def _post_schedule_inline(
             "id_in_plan": str(id_in_plan),
             "plan_program_id": "",
             "entity_id": "",
+            "enrichment_ok": False,
         }
         try:
             post_data = await _fetch_schedule_data(client, auth, happen_day, happen_day)
@@ -1252,6 +1263,11 @@ async def _post_schedule_inline(
                     result["id_in_plan"] = str(entity.get("idInPlan", id_in_plan))
                     result["plan_program_id"] = str(entity.get("planProgramId", ""))
                     result["entity_id"] = str(entity.get("id", ""))
+                    result["enrichment_ok"] = bool(
+                        result["plan_id"]
+                        and result["plan_program_id"]
+                        and result["entity_id"]
+                    )
                     break
         except (httpx.HTTPError, ValueError):
             pass

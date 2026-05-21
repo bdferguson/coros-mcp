@@ -63,6 +63,24 @@ async def _run_with_auth(fn, auth, *args, **kwargs):
         return await fn(new_auth, *args, **kwargs)
 
 
+_ENRICHMENT_WARNING = (
+    "Schedule POST succeeded but enrichment GET could not resolve "
+    "plan_id/plan_program_id/entity_id. remove_scheduled_workout will not "
+    "work with this response — call list_planned_activities for the day to "
+    "look up the missing identifiers."
+)
+
+
+def _attach_enrichment_warning(result: dict, response: dict) -> dict:
+    """Add a top-level `warning` key to `result` if the inline-schedule
+    enrichment GET could not populate the server-assigned identifiers.
+    Default to False when the key is absent so a missing flag surfaces
+    as a warning (safer than silent omission)."""
+    if not response.get("enrichment_ok", False):
+        result["warning"] = _ENRICHMENT_WARNING
+    return result
+
+
 def _summarize_steps(steps: list[dict]) -> tuple[float, int]:
     """Return (total_minutes, steps_count) for a workout step list."""
     total_minutes = 0.0
@@ -671,11 +689,16 @@ async def schedule_workout_template(
 
     Returns
     -------
-    dict with keys: scheduled, workout_id, happen_day, response
+    dict with keys: scheduled, workout_id, happen_day, response, and
+    optionally 'warning' if enrichment lookup failed.
 
     The 'response' dict contains the server-assigned identifiers needed to
     later remove this calendar entry: plan_id, id_in_plan, plan_program_id,
-    entity_id — pipe these into remove_scheduled_workout directly.
+    entity_id, plus enrichment_ok. When enrichment_ok is True, pipe the
+    response into remove_scheduled_workout directly. When False, a top-level
+    'warning' key is set — the schedule POST succeeded but plan_id /
+    plan_program_id / entity_id are empty strings, so look them up via
+    list_planned_activities before calling remove_scheduled_workout.
     """
     auth = await _get_auth()
     if auth is None:
@@ -684,12 +707,15 @@ async def schedule_workout_template(
         response = await _run_with_auth(
             coros_api.schedule_workout_template, auth, workout_id, happen_day, sort_no
         )
-        return {
-            "scheduled": True,
-            "workout_id": workout_id,
-            "happen_day": happen_day,
-            "response": response,
-        }
+        return _attach_enrichment_warning(
+            {
+                "scheduled": True,
+                "workout_id": workout_id,
+                "happen_day": happen_day,
+                "response": response,
+            },
+            response,
+        )
     except Exception as exc:
         return {"error": str(exc), "scheduled": False}
 
@@ -739,11 +765,16 @@ async def schedule_workout(
 
     Returns
     -------
-    dict with keys: scheduled, name, happen_day, total_minutes, steps_count, response
+    dict with keys: scheduled, name, happen_day, total_minutes, steps_count,
+    response, and optionally 'warning' if enrichment lookup failed.
 
     The 'response' dict contains the server-assigned identifiers needed to
     later remove this calendar entry: plan_id, id_in_plan, plan_program_id,
-    entity_id — pipe these into remove_scheduled_workout directly.
+    entity_id, plus enrichment_ok. When enrichment_ok is True, pipe the
+    response into remove_scheduled_workout directly. When False, a top-level
+    'warning' key is set — the schedule POST succeeded but plan_id /
+    plan_program_id / entity_id are empty strings, so look them up via
+    list_planned_activities before calling remove_scheduled_workout.
     """
     auth = await _get_auth()
     if auth is None:
@@ -760,14 +791,17 @@ async def schedule_workout(
             sort_no,
         )
         total_minutes, steps_count = _summarize_steps(steps)
-        return {
-            "scheduled": True,
-            "name": name,
-            "happen_day": happen_day,
-            "total_minutes": total_minutes,
-            "steps_count": steps_count,
-            "response": response,
-        }
+        return _attach_enrichment_warning(
+            {
+                "scheduled": True,
+                "name": name,
+                "happen_day": happen_day,
+                "total_minutes": total_minutes,
+                "steps_count": steps_count,
+                "response": response,
+            },
+            response,
+        )
     except Exception as exc:
         return {"error": str(exc), "scheduled": False}
 
@@ -817,11 +851,16 @@ async def schedule_strength_workout(
 
     Returns
     -------
-    dict with keys: scheduled, name, happen_day, sets, exercise_count, response
+    dict with keys: scheduled, name, happen_day, sets, exercise_count,
+    response, and optionally 'warning' if enrichment lookup failed.
 
     The 'response' dict contains the server-assigned identifiers needed to
     later remove this calendar entry: plan_id, id_in_plan, plan_program_id,
-    entity_id — pipe these into remove_scheduled_workout directly.
+    entity_id, plus enrichment_ok. When enrichment_ok is True, pipe the
+    response into remove_scheduled_workout directly. When False, a top-level
+    'warning' key is set — the schedule POST succeeded but plan_id /
+    plan_program_id / entity_id are empty strings, so look them up via
+    list_planned_activities before calling remove_scheduled_workout.
     """
     auth = await _get_auth()
     if auth is None:
@@ -836,14 +875,17 @@ async def schedule_strength_workout(
             sets,
             sort_no,
         )
-        return {
-            "scheduled": True,
-            "name": name,
-            "happen_day": happen_day,
-            "sets": sets,
-            "exercise_count": len(exercises),
-            "response": response,
-        }
+        return _attach_enrichment_warning(
+            {
+                "scheduled": True,
+                "name": name,
+                "happen_day": happen_day,
+                "sets": sets,
+                "exercise_count": len(exercises),
+                "response": response,
+            },
+            response,
+        )
     except Exception as exc:
         return {"error": str(exc), "scheduled": False}
 
