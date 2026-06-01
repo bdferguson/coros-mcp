@@ -550,17 +550,23 @@ async def fetch_activities(
     return [_parse_activity(i) for i in items], total
 
 
-async def fetch_activity_detail(auth: StoredAuth, activity_id: str, sport_type: int = 0) -> dict:
+async def fetch_activity_detail(
+    auth: StoredAuth, activity_id: str, sport_type: int = 0,
+    include_streams: bool = False,
+) -> dict:
     """
     Fetch full activity detail including laps, HR zones, and metrics.
     Returns raw API data dict.
     Requires sport_type (e.g. 200=Road Bike, 201=Indoor Cycling, 100=Running).
+
+    When include_streams=True, preserves graphList/frequencyList/gpsLightDuration
+    in the response (large time-series arrays used for activity export).
     """
     headers = {k: v for k, v in _auth_headers(auth).items() if k != "Content-Type"}
     url = _base_url(auth.region) + ENDPOINTS["activity_detail"]
     form_data = {"labelId": activity_id, "userId": auth.user_id, "sportType": str(sport_type)}
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(url, data=form_data, headers=headers)
         resp.raise_for_status()
         body = resp.json()
@@ -568,9 +574,10 @@ async def fetch_activity_detail(auth: StoredAuth, activity_id: str, sport_type: 
     _check_response(body, "activity detail")
 
     data = body.get("data", {})
-    # Strip large time-series arrays that bloat the response
-    for key in ("graphList", "frequencyList", "gpsLightDuration"):
-        data.pop(key, None)
+    if not include_streams:
+        # Strip large time-series arrays that bloat the response
+        for key in ("graphList", "frequencyList", "gpsLightDuration"):
+            data.pop(key, None)
     return data
 
 

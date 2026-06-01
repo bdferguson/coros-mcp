@@ -200,6 +200,59 @@ def cmd_sync() -> int:
         return 1
 
 
+def cmd_export_activities() -> int:
+    """Export activities from cache + API to markdown/streams files."""
+    import argparse
+    from pathlib import Path
+
+    from export import DEFAULT_OUTPUT_DIR, export_activities
+
+    parser = argparse.ArgumentParser(
+        prog="coros-mcp export-activities",
+        description="Export Coros activities to markdown + streams JSON.",
+    )
+    parser.add_argument(
+        "--days", type=int, default=7,
+        help="Export activities from the last N days (default: 7)",
+    )
+    parser.add_argument(
+        "--output-dir", type=str, default=str(DEFAULT_OUTPUT_DIR),
+        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+    )
+    parser.add_argument(
+        "--full", action="store_true",
+        help="Re-export all activities (ignore previously exported)",
+    )
+    parsed = parser.parse_args(sys.argv[2:])
+
+    auth = get_stored_auth()
+    if auth is None:
+        auth = asyncio.run(try_auto_login())
+    if auth is None:
+        print("Not authenticated. Run 'coros-mcp auth' first.")
+        return 1
+
+    output_dir = Path(parsed.output_dir)
+    print(f"Exporting activities (last {parsed.days} days) to {output_dir}")
+
+    try:
+        result = asyncio.run(export_activities(
+            auth, days=parsed.days, output_dir=output_dir, full=parsed.full,
+        ))
+        exported = result["exported"]
+        skipped = result["skipped"]
+        errors = result["errors"]
+
+        print(f"Export complete: {exported} new, {skipped} skipped")
+        if errors:
+            for e in errors:
+                print(f"  Error: {e}")
+        return 1 if errors else 0
+    except Exception as e:
+        print(f"Export failed: {e}")
+        return 1
+
+
 def cmd_cache_status() -> int:
     """Show local cache coverage."""
     from cache.store import cache_status, init_db
@@ -235,6 +288,7 @@ Usage:
   coros-mcp auth-status             Check status of both tokens
   coros-mcp auth-clear              Remove stored token
   coros-mcp sync [--from YYYYMMDD] [--to YYYYMMDD]  Sync to local cache (default: 2 years → today)
+  coros-mcp export-activities [--days N] [--output-dir PATH] [--full]  Export activities to md + streams
   coros-mcp cache-status            Show local cache coverage
   coros-mcp help                    Show this help message
 """
@@ -255,6 +309,7 @@ def main() -> None:
         "auth-status": cmd_auth_status,
         "auth-clear": cmd_auth_clear,
         "sync": cmd_sync,
+        "export-activities": cmd_export_activities,
         "cache-status": cmd_cache_status,
         "help": cmd_help,
         "--help": cmd_help,
